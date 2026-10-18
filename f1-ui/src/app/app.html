@@ -1,0 +1,128 @@
+<header class="topbar">
+  <div class="brand">
+    <span class="logo" aria-hidden="true">◢</span>
+    <div>
+      <h1>F1 Strategy Lab</h1>
+      <p class="muted small">Real Jolpica data</p>
+    </div>
+  </div>
+  <form class="row" (ngSubmit)="loadSeason(null)">
+    <label>Season
+      <input type="number" min="1996" max="2030" [(ngModel)]="season" name="season" class="narrow" />
+    </label>
+    <button type="submit">Load</button>
+    <label class="grow">Race
+      <select [ngModel]="raceRound()" (ngModelChange)="selectRace($event)" name="race" [disabled]="races().length === 0">
+        <option [ngValue]="null" disabled>Choose a race…</option>
+        @for (r of races(); track r.round) {
+          <option [ngValue]="r.round">R{{ r.round }} · {{ r.name }}{{ r.imported ? ' ✓' : '' }}</option>
+        }
+      </select>
+    </label>
+  </form>
+</header>
+
+@if (loading()) {
+  <p class="banner">{{ loading() }}</p>
+}
+@if (error()) {
+  <p class="banner error">{{ error() }}</p>
+}
+
+@if (summary(); as s) {
+  <main class="layout">
+    <section class="content">
+      <div class="card">
+        <div class="card-head">
+          <h2>{{ s.race.name }} {{ s.race.season }}</h2>
+          <span class="muted">{{ s.race.circuit }}, {{ s.race.country }} · {{ s.race.date }} · {{ s.race.totalLaps }} laps</span>
+        </div>
+        <div class="tiles">
+          <div class="tile"><span class="label">Winner</span><span class="value">{{ s.winner }}</span></div>
+          <div class="tile"><span class="label">Fastest lap</span><span class="value">{{ s.fastestLap?.code }} {{ s.fastestLap?.time }}</span><span class="small muted">lap {{ s.fastestLap?.lap }}</span></div>
+          <div class="tile"><span class="label">Typical strategy</span><span class="value">{{ s.mostCommonStopCount }}</span></div>
+          <div class="tile"><span class="label">Quickest pit lane</span><span class="value">{{ s.fastestPitStop?.code }} {{ sec(s.fastestPitStop?.pitLaneMs) }}</span><span class="small muted">lap {{ s.fastestPitStop?.lap }}</span></div>
+          <div class="tile"><span class="label">Suspected SC/VSC</span><span class="value">{{ s.neutralisedLapRanges.join(', ') || 'None' }}</span></div>
+        </div>
+        <p class="small">
+          <strong>Gainers:</strong>
+          @for (m of s.biggestGainers; track m.code) { {{ m.code }} P{{ m.grid }}→P{{ m.finish }} (+{{ m.change }}) · }
+          <strong>Losers:</strong>
+          @for (m of s.biggestLosers; track m.code) { {{ m.code }} P{{ m.grid }}→P{{ m.finish }} ({{ m.change }}) · }
+        </p>
+        @if (s.retirements.length) {
+          <p class="small muted"><strong>Retirements:</strong> {{ s.retirements.join(' · ') }}</p>
+        }
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h3>Drivers</h3>
+          <span class="muted small">Pick up to {{ maxSelected }} to compare ({{ selected().length }} selected)</span>
+        </div>
+        <div class="chips">
+          @for (d of sortedDrivers(); track d.id) {
+            <button class="chip" [class.on]="isSelected(d.id)" (click)="toggle(d)"
+                    [disabled]="!isSelected(d.id) && selected().length >= maxSelected"
+                    [attr.aria-pressed]="isSelected(d.id)" [title]="d.name + ' · ' + d.team + ' · ' + d.status">
+              @if (isSelected(d.id)) {
+                <span class="swatch" [style.background]="'var(--series-' + (slotOf(d.id) + 1) + ')'"></span>
+              }
+              <span class="pos">{{ d.positionText }}</span> {{ d.code }}
+            </button>
+          }
+        </div>
+      </div>
+
+      @if (laps(); as l) {
+        <div class="card">
+          <app-lap-chart [data]="l" [selected]="selected()" />
+        </div>
+      }
+
+      @if (pair(); as p) {
+        <div class="card">
+          <app-compare-panel [raceId]="raceId()!" [pair]="p" />
+        </div>
+      }
+
+      @for (sel of selected(); track sel.id) {
+        <div class="card">
+          <app-strategy-panel [raceId]="raceId()!" [driverId]="sel.id" [slot]="sel.slot" />
+        </div>
+      }
+
+      <div class="card">
+        <app-what-if-panel [raceId]="raceId()!" [drivers]="sortedDrivers()" [preferredDriverId]="selectedIds()[0] ?? null" />
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Classification &amp; strategies</h3></div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Pos</th><th>Driver</th><th>Team</th><th class="num">Grid</th><th>Status</th><th class="num">Stops</th><th>Pit laps</th><th>Stint lengths</th></tr>
+            </thead>
+            <tbody>
+              @for (d of s.classification; track d.code) {
+                <tr>
+                  <td>{{ d.finish }}</td><td>{{ d.code }}</td><td>{{ d.team }}</td><td class="num">{{ d.grid }}</td>
+                  <td>{{ d.status }}</td><td class="num">{{ d.stops }}</td><td>{{ d.pitLaps.join(', ') }}</td><td>{{ d.stintLengths.join(' / ') }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <aside class="card chat">
+      <app-chat-panel [raceId]="raceId()!" [driverIds]="selectedIds()" [driverNames]="selectedNames()" />
+    </aside>
+  </main>
+} @else if (!loading()) {
+  <section class="empty">
+    <h2>Pick a season and race to start</h2>
+    <p class="muted">The first time you open a race, it is downloaded from the free Jolpica F1 API and saved in the local H2 database. After that, everything runs offline on this laptop.</p>
+  </section>
+}
